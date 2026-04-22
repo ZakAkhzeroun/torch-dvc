@@ -11,3 +11,5 @@ decimgres/*
 .conda
 
 .cache
+
+OpenDVC_model/
