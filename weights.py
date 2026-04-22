@@ -28,7 +28,7 @@ TF_TO_TORCH_LAYER: Dict[str, str] = {
 
 
 def _resolve_checkpoint_prefix(
-    basketball_data_root: str = "BasketballData",
+    basketball_data_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
 ) -> str:
     root = Path(basketball_data_root)
@@ -83,7 +83,7 @@ def _get_tensor(reader, tensor_name: str) -> np.ndarray:
 def load_mc_weights(
     model: MCNetwork,
     checkpoint_prefix: Optional[str] = None,
-    basketball_data_root: str = "BasketballData",
+    basketball_data_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     map_location: Union[str, torch.device] = "cpu",
 ) -> MCNetwork:
@@ -120,7 +120,7 @@ def load_mc_weights(
 
 def build_mc_with_weights(
     checkpoint_prefix: Optional[str] = None,
-    basketball_data_root: str = "BasketballData",
+    basketball_data_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     device: Union[str, torch.device] = "cpu",
 ) -> MCNetwork:

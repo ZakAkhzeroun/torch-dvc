@@ -1,0 +1,13 @@
+# Ignore generated outputs, keep directories
+imgres/*
+!imgres/.gitkeep
+
+latres/*
+!latres/.gitkeep
+
+decimgres/*
+!decimgres/.gitkeep
+
+.conda
+
+.cache

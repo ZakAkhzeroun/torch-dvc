@@ -17,7 +17,7 @@ def _normalize_checkpoint_prefix(path_str: str) -> str:
 
 
 def _resolve_checkpoint_prefix(
-    search_root: str = ".",
+    search_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
 ) -> str:
     env_prefix = os.environ.get("OPENDVC_CHECKPOINT_PREFIX")
@@ -173,7 +173,7 @@ def _load_signal_conv_block(
 def load_mv_analysis_weights(
     model: MVAnalysis,
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     map_location: Union[str, torch.device] = "cpu",
 ) -> MVAnalysis:
@@ -201,7 +201,7 @@ def load_mv_analysis_weights(
 def load_mv_synthesis_weights(
     model: MVSynthesis,
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     map_location: Union[str, torch.device] = "cpu",
 ) -> MVSynthesis:
@@ -228,7 +228,7 @@ def load_mv_synthesis_weights(
 
 def build_mv_analysis_with_weights(
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     device: Union[str, torch.device] = "cpu",
 ) -> MVAnalysis:
@@ -255,7 +255,7 @@ def build_mv_analysis_with_weights(
 
 def build_mv_synthesis_with_weights(
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     device: Union[str, torch.device] = "cpu",
 ) -> MVSynthesis:
@@ -283,7 +283,7 @@ def build_mv_synthesis_with_weights(
 def load_res_analysis_weights(
     model: ResAnalysis,
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     map_location: Union[str, torch.device] = "cpu",
 ) -> ResAnalysis:
@@ -309,7 +309,7 @@ def load_res_analysis_weights(
 def load_res_synthesis_weights(
     model: ResSynthesis,
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     map_location: Union[str, torch.device] = "cpu",
 ) -> ResSynthesis:
@@ -334,7 +334,7 @@ def load_res_synthesis_weights(
 
 def build_res_analysis_with_weights(
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     device: Union[str, torch.device] = "cpu",
 ) -> ResAnalysis:
@@ -361,7 +361,7 @@ def build_res_analysis_with_weights(
 
 def build_res_synthesis_with_weights(
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     device: Union[str, torch.device] = "cpu",
 ) -> ResSynthesis:

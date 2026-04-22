@@ -25,7 +25,9 @@ def _normalize_checkpoint_prefix(path_str: str) -> str:
     return str(path)
 
 
-def _resolve_motion_checkpoint_prefix(search_root: str = ".") -> str:
+def _resolve_motion_checkpoint_prefix(
+    search_root: str = "OpenDVC_model/PSNR_256_model",
+) -> str:
     """Resolve the TensorFlow checkpoint prefix for the optical flow model."""
     env_prefix = os.environ.get("MOTION_CHECKPOINT_PREFIX")
     if env_prefix:
@@ -113,7 +115,7 @@ def _resolve_tensor_prefix(reader, layer_index: int, tf_layer_name: str) -> str:
 def load_motion_weights(
     model: MotionNetwork,
     checkpoint_prefix: Optional[str] = None,
-    motion_root: str = ".",
+    motion_root: str = "OpenDVC_model/PSNR_256_model",
     map_location: Union[str, torch.device] = "cpu",
 ) -> MotionNetwork:
     """Load TensorFlow optical-flow weights into the PyTorch MotionNetwork."""
@@ -152,7 +154,7 @@ def load_motion_weights(
 
 def build_motion_with_weights(
     checkpoint_prefix: Optional[str] = None,
-    motion_root: str = ".",
+    motion_root: str = "OpenDVC_model/PSNR_256_model",
     device: Union[str, torch.device] = "cpu",
 ) -> MotionNetwork:
     """Build a MotionNetwork and load TensorFlow weights into it."""

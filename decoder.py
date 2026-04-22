@@ -81,8 +81,8 @@ class OpenDVCPFrameDecoder(nn.Module):
 
 def build_opendvc_pframe_decoder(
     checkpoint_prefix: Optional[str] = None,
-    open_dvc_root: str = ".",
-    basketball_data_root: str = "BasketballData",
+    open_dvc_root: str = "OpenDVC_model/PSNR_256_model",
+    basketball_data_root: str = "OpenDVC_model/PSNR_256_model",
     metric: str = "psnr",
     device: Union[str, torch.device] = "cpu",
 ) -> OpenDVCPFrameDecoder:
