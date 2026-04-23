@@ -8,8 +8,8 @@ latres/*
 decimgres/*
 !decimgres/.gitkeep
 
+OpenDVC_model/
+
 .conda
 
 .cache
-
-OpenDVC_model/
