@@ -13,3 +13,8 @@ OpenDVC_model/
 .conda
 
 .cache
+
+OpenDVC_model/
+zippedmodel/
+*.ckpt
+*.zip
