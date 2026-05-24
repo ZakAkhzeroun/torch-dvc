@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from decoder import build_opendvc_pframe_decoder
+from src.models.fp32 import build_opendvc_pframe_decoder
 
 
 def _load_image(path):

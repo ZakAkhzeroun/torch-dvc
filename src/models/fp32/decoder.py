@@ -1,5 +1,4 @@
 import argparse
-import sys
 from pathlib import Path
 from typing import Dict, Optional, Union
 
@@ -7,20 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-if __package__ is None or __package__ == "":
-    REPO_ROOT = Path(__file__).resolve().parents[1]
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
-
-    from torch_dvc.MC_network_torch import MCNetwork
-    from torch_dvc.CNN_img_torch import MVSynthesis, ResSynthesis
-    from torch_dvc.cnn_img_weights import (
-        build_mv_synthesis_with_weights,
-        build_res_synthesis_with_weights,
-    )
-    from torch_dvc.motion_torch import dense_image_warp
-    from torch_dvc.weights import build_mc_with_weights
-else:
+try:
     from .MC_network_torch import MCNetwork
     from .CNN_img_torch import MVSynthesis, ResSynthesis
     from .cnn_img_weights import (
@@ -29,6 +15,15 @@ else:
     )
     from .motion_torch import dense_image_warp
     from .weights import build_mc_with_weights
+except ImportError:
+    from src.models.fp32.MC_network_torch import MCNetwork
+    from src.models.fp32.CNN_img_torch import MVSynthesis, ResSynthesis
+    from src.models.fp32.cnn_img_weights import (
+        build_mv_synthesis_with_weights,
+        build_res_synthesis_with_weights,
+    )
+    from src.models.fp32.motion_torch import dense_image_warp
+    from src.models.fp32.weights import build_mc_with_weights
 
 
 class OpenDVCPFrameDecoder(nn.Module):
