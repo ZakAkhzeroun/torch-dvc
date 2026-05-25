@@ -18,3 +18,9 @@ OpenDVC_model/
 zippedmodel/
 *.ckpt
 *.zip
+*.log
+__pycache__/
+*.py[cod]
+*.pyo
+
+ANALYSIS.md

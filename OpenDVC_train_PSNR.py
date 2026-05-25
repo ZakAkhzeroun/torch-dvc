@@ -12,6 +12,7 @@ import load
 from src.models.fp32.CNN_img_torch import MVAnalysis, MVSynthesis, ResAnalysis, ResSynthesis
 from src.models.fp32.MC_network_torch import MCNetwork
 from src.models.fp32.motion_torch import MotionNetwork, dense_image_warp
+from src.models.quant.opendvc_pframe_qat import OpenDVCPFrameQATModel, load_fp32_state_into_qat
 
 
 class FallbackEntropyBottleneck(nn.Module):
@@ -71,18 +72,49 @@ class EntropyBottleneckTorch(nn.Module):
 
 
 class OpenDVCTrainPSNRModel(nn.Module):
-    def __init__(self, num_filters: int, latent_channels: int):
+    def __init__(
+        self,
+        num_filters: int,
+        latent_channels: int,
+        mode: str = "fp32",
+        weight_bits: int = 16,
+        act_bits: int = 16,
+        use_likelihoods: bool = True,
+    ):
         super().__init__()
-        self.motion = MotionNetwork()
-        self.mv_analysis = MVAnalysis(num_filters=num_filters, M=latent_channels)
-        self.mv_synthesis = MVSynthesis(num_filters=num_filters, M=latent_channels)
-        self.entropy_bottleneck_mv = EntropyBottleneckTorch(latent_channels)
-        self.mc = MCNetwork()
-        self.res_analysis = ResAnalysis(num_filters=num_filters, M=latent_channels)
-        self.res_synthesis = ResSynthesis(num_filters=num_filters, M=latent_channels)
-        self.entropy_bottleneck_res = EntropyBottleneckTorch(latent_channels)
+        self.mode = mode
+        self.use_likelihoods = use_likelihoods
+
+        if mode == "qat":
+            entropy_factory = EntropyBottleneckTorch if use_likelihoods else None
+            self.qat_model = OpenDVCPFrameQATModel(
+                num_filters=num_filters,
+                latent_channels=latent_channels,
+                weight_bits=weight_bits,
+                act_bits=act_bits,
+                entropy_factory=entropy_factory,
+            )
+        else:
+            self.motion = MotionNetwork()
+            self.mv_analysis = MVAnalysis(num_filters=num_filters, M=latent_channels)
+            self.mv_synthesis = MVSynthesis(num_filters=num_filters, M=latent_channels)
+            self.entropy_bottleneck_mv = EntropyBottleneckTorch(latent_channels)
+            self.mc = MCNetwork()
+            self.res_analysis = ResAnalysis(num_filters=num_filters, M=latent_channels)
+            self.res_synthesis = ResSynthesis(num_filters=num_filters, M=latent_channels)
+            self.entropy_bottleneck_res = EntropyBottleneckTorch(latent_channels)
 
     def forward(self, y0_com: torch.Tensor, y1_raw: torch.Tensor) -> Dict[str, torch.Tensor]:
+        if self.mode == "qat":
+            out = self.qat_model(y0_com, y1_raw)
+            return {
+                "y1_com": out["y1_com"],
+                "y1_warp": out["y1_warp"],
+                "y1_mc": out["y1_mc"],
+                "mv_likelihoods": out["mv_likelihoods"],
+                "res_likelihoods": out["res_likelihoods"],
+            }
+
         flow_tensor, _, _, _, _, _ = self.motion(y0_com, y1_raw)
 
         flow_latent = self.mv_analysis(flow_tensor)
@@ -109,10 +141,14 @@ class OpenDVCTrainPSNRModel(nn.Module):
         }
 
     def aux_loss(self) -> torch.Tensor:
+        if self.mode == "qat":
+            return self.qat_model.aux_loss()
         return self.entropy_bottleneck_mv.aux_loss() + self.entropy_bottleneck_res.aux_loss()
 
 
 def _bpp_from_likelihoods(likelihoods: torch.Tensor, height: int, width: int, batch_size: int) -> torch.Tensor:
+    if likelihoods is None:
+        return None
     return torch.sum(-torch.log2(torch.clamp(likelihoods, min=1e-9))) / (height * width * batch_size)
 
 
@@ -171,6 +207,12 @@ def main():
     parser.add_argument("--train-data-root", default="training_data")
     parser.add_argument("--weights-root", default="OpenDVC_model")
     parser.add_argument("--testing", type=_parse_bool, default=False)
+    parser.add_argument("--mode", default="fp32", choices=["fp32", "qat"])
+    parser.add_argument("--weight-bits", type=int, default=16)
+    parser.add_argument("--act-bits", type=int, default=16)
+    parser.add_argument("--qat-lr-scale", type=float, default=0.1)
+    parser.add_argument("--use-likelihoods", type=_parse_bool, default=False)
+    parser.add_argument("--fp32-init-checkpoint", default=None)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
@@ -181,12 +223,28 @@ def main():
     folder = None if args.testing else _discover_training_folders(args.train_data_root)
     device = torch.device(args.device)
 
-    model = OpenDVCTrainPSNRModel(num_filters=args.N, latent_channels=args.M).to(device)
+    model = OpenDVCTrainPSNRModel(
+        num_filters=args.N,
+        latent_channels=args.M,
+        mode=args.mode,
+        weight_bits=args.weight_bits,
+        act_bits=args.act_bits,
+        use_likelihoods=args.use_likelihoods,
+    ).to(device)
     model.train()
 
-    main_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    aux_params = list(model.entropy_bottleneck_mv.parameters()) + list(model.entropy_bottleneck_res.parameters())
-    aux_optimizer = torch.optim.Adam(aux_params, lr=args.lr * 10.0)
+    if args.mode == "qat" and args.fp32_init_checkpoint:
+        ckpt = torch.load(args.fp32_init_checkpoint, map_location=device)
+        fp32_state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
+        loaded_keys, skipped = load_fp32_state_into_qat(model.qat_model, fp32_state)
+        print("QAT init from FP32 checkpoint loaded={} skipped={}".format(len(loaded_keys), len(skipped)))
+
+    base_lr = args.lr if args.mode == "fp32" else args.lr * args.qat_lr_scale
+    main_optimizer = torch.optim.Adam(model.parameters(), lr=base_lr)
+    aux_params = []
+    if args.mode == "fp32":
+        aux_params = list(model.entropy_bottleneck_mv.parameters()) + list(model.entropy_bottleneck_res.parameters())
+    aux_optimizer = torch.optim.Adam(aux_params, lr=base_lr * 10.0) if aux_params else None
 
     save_path = os.path.join(args.weights_root, "PSNR_{}_model".format(args.l))
     os.makedirs(save_path, exist_ok=True)
@@ -216,9 +274,10 @@ def main():
             lr = args.lr / 100.0
 
         for param_group in main_optimizer.param_groups:
-            param_group["lr"] = lr
-        for param_group in aux_optimizer.param_groups:
-            param_group["lr"] = lr * 10.0
+            param_group["lr"] = lr if args.mode == "fp32" else lr * args.qat_lr_scale
+        if aux_optimizer is not None:
+            for param_group in aux_optimizer.param_groups:
+                param_group["lr"] = (lr if args.mode == "fp32" else lr * args.qat_lr_scale) * 10.0
 
         if args.testing:
             data = np.random.randint(
@@ -254,6 +313,10 @@ def main():
             outputs = model(y0, y1)
             train_bpp_mv = _bpp_from_likelihoods(outputs["mv_likelihoods"], args.height, args.width, args.batch_size)
             train_bpp_res = _bpp_from_likelihoods(outputs["res_likelihoods"], args.height, args.width, args.batch_size)
+            if train_bpp_mv is None:
+                train_bpp_mv = y1.new_zeros(())
+            if train_bpp_res is None:
+                train_bpp_res = y1.new_zeros(())
 
             total_mse = torch.mean((outputs["y1_com"] - y1) ** 2)
             warp_mse = torch.mean((outputs["y1_warp"] - y1) ** 2)
@@ -274,11 +337,12 @@ def main():
             train_loss.backward()
             main_optimizer.step()
 
-            aux_optimizer.zero_grad(set_to_none=True)
-            aux_loss = model.aux_loss()
-            if aux_loss.requires_grad:
-                aux_loss.backward()
-                aux_optimizer.step()
+            if aux_optimizer is not None:
+                aux_optimizer.zero_grad(set_to_none=True)
+                aux_loss = model.aux_loss()
+                if aux_loss.requires_grad:
+                    aux_loss.backward()
+                    aux_optimizer.step()
 
             f1_decoded = _to_hwc(outputs["y1_com"])  # in [0, 1]
             psnr = 10.0 * torch.log10(1.0 / torch.clamp(total_mse, min=1e-12))
@@ -302,7 +366,7 @@ def main():
                         "args": vars(args),
                         "model_state_dict": model.state_dict(),
                         "optimizer_state_dict": main_optimizer.state_dict(),
-                        "aux_optimizer_state_dict": aux_optimizer.state_dict(),
+                        "aux_optimizer_state_dict": aux_optimizer.state_dict() if aux_optimizer is not None else None,
                     },
                     checkpoint_path,
                 )
@@ -312,7 +376,7 @@ def main():
                         "args": vars(args),
                         "model_state_dict": model.state_dict(),
                         "optimizer_state_dict": main_optimizer.state_dict(),
-                        "aux_optimizer_state_dict": aux_optimizer.state_dict(),
+                        "aux_optimizer_state_dict": aux_optimizer.state_dict() if aux_optimizer is not None else None,
                     },
                     latest_path,
                 )

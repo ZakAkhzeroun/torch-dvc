@@ -5,6 +5,10 @@ import numpy as np
 import torch
 
 from src.models.fp32 import build_opendvc_pframe_decoder
+from src.models.quant.decoder_qat import (
+    build_opendvc_pframe_decoder_qat,
+    load_fp32_state_into_qat_decoder,
+)
 
 
 def _load_image(path):
@@ -138,6 +142,12 @@ def main():
     parser.add_argument("--weights-root", default="OpenDVC_model")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--checkpoint-prefix", default=None)
+    parser.add_argument("--mode", default="fp32", choices=["fp32", "qat"])
+    parser.add_argument("--weight-bits", type=int, default=16)
+    parser.add_argument("--act-bits", type=int, default=16)
+    parser.add_argument("--fp32-init-checkpoint", default=None)
+    parser.add_argument("--num-filters", type=int, default=128)
+    parser.add_argument("--latent-channels", type=int, default=128)
     parser.add_argument("--max-frames", type=int, default=None)
     args = parser.parse_args()
 
@@ -159,13 +169,28 @@ def main():
     else:
         ref_path = _find_reference_image(ref_dir, lat_files)
 
-    checkpoint_prefix, metric = _resolve_checkpoint_prefix(args)
+    if args.mode == "fp32":
+        checkpoint_prefix, metric = _resolve_checkpoint_prefix(args)
+        decoder_model = build_opendvc_pframe_decoder(
+            checkpoint_prefix=checkpoint_prefix,
+            metric=metric,
+            device=args.device,
+        )
+    else:
+        metric = args.metric if args.metric is not None else "psnr"
+        decoder_model = build_opendvc_pframe_decoder_qat(
+            num_filters=args.num_filters,
+            latent_channels=args.latent_channels,
+            weight_bits=args.weight_bits,
+            act_bits=args.act_bits,
+            device=torch.device(args.device),
+        )
+        if args.fp32_init_checkpoint is not None:
+            ckpt = torch.load(args.fp32_init_checkpoint, map_location=args.device)
+            fp32_state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
+            loaded, skipped, _ = load_fp32_state_into_qat_decoder(decoder_model, fp32_state)
+            print("QAT decoder init from FP32 checkpoint loaded={} skipped={}".format(loaded, skipped))
 
-    decoder_model = build_opendvc_pframe_decoder(
-        checkpoint_prefix=checkpoint_prefix,
-        metric=metric,
-        device=args.device,
-    )
     decoder_model.eval()
 
     ref = _load_image(ref_path)
@@ -193,6 +218,7 @@ def main():
 
     print("Decoding finished.")
     print("Saved decoded images to: {}".format(out_dir.resolve()))
+    print("Decoder mode: {}".format(args.mode))
 
 
 if __name__ == "__main__":
